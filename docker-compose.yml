@@ -1,0 +1,274 @@
+version: "3.6"
+
+services:
+
+#### KAFKA
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.4
+    hostname: zookeeper
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 22181:2181
+    networks:
+      - todo
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.4
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:29092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER: PLAINTEXT://:9092,PLAINTEXT_HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://192.168.65.1:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: nc -z localhost 29092 || exit -1
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    networks:
+      - todo
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:3.27.0
+    hostname: kafdrop
+    container_name: kafdrop
+    depends_on:
+      - kafka
+      - zookeeper
+    ports:
+      - 19000:9000
+    environment:
+      KAFKA_BROKERCONNECT: kafka:9092
+    networks:
+      - todo
+      
+## BD: CASSANSDRA
+
+  cassandra1:
+    image: cassandra:3.11.3
+    container_name: cassandra1
+    hostname: cassandra1
+    networks: 
+      - todo
+    ports:
+      - '9042:9042'
+    environment: &environment
+      MAX_HEAP_SIZE: 256M
+      HEAP_NEWSIZE: 128M
+      CASSANDRA_SEEDS: "cassandra1,cassandra2,cassandra3"
+      CASSANDRA_USER: cassandra
+      CASSANDRA_HOST: cassandra
+      CASSANDRA_PASSWORD: cassandra
+      CASSANDRA_CLUSTER_NAME: CassandraCluster
+      CASSANDRA_NUM_TOKENS: 128
+      CASSANDRA_DATACENTER: DataCenter1
+      CASSANDRA_RACK: Rack1
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+    healthcheck:
+      test: ["CMD", "cqlsh", "-u cassandra", "-p cassandra" ,"-e describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+
+  cassandra2:
+    image: cassandra:3.11.3
+    container_name: cassandra2
+    hostname: cassandra2
+    networks: 
+      - todo
+    ports:
+      - '9043:9042'
+    environment: *environment
+    healthcheck:
+      test: ["CMD", "cqlsh", "-u cassandra", "-p cassandra" ,"-e describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+
+  cassandra3:
+    image: cassandra:3.11.3
+    container_name: cassandra3
+    hostname: cassandra3
+    networks: 
+      - todo
+    ports:
+      - '9044:9042'
+    environment: *environment
+    healthcheck:
+      test: ["CMD", "cqlsh", "-u cassandra", "-p cassandra" ,"-e describe keyspaces"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      
+  cassandra-init:
+    image: cassandra:3.11.3
+    container_name: cassandra-init
+    networks:
+      - todo
+    depends_on:
+      cassandra1:
+        condition: service_healthy
+      cassandra2:
+        condition: service_healthy
+      cassandra3:
+        condition: service_healthy
+    volumes:
+      - ./cassandra/cassandra-setup.cql:/cassandra-setup.cql
+    command: /bin/bash -c "echo loading cassandra keyspace && cqlsh cassandra1 -u cassandra -p cassandra -f /cassandra-setup.cql"
+
+  cassandra-web:
+    build: ./
+    image: dcagatay/cassandra-web:latest
+    container_name: cassandra-web
+    networks:
+      - todo 
+    depends_on:
+      cassandra1:
+        condition: service_healthy
+      cassandra2:
+        condition: service_healthy
+      cassandra3:
+        condition: service_healthy
+    ports:
+      - 4000:3000
+    environment:
+      CASSANDRA_HOST_IPS: 192.168.65.1
+      CASSANDRA_PORT: 9042
+      CASSANDRA_USER: cassandra
+      CASSANDRA_PASSWORD: cassandra
+    restart: unless-stopped
+
+## VISUALIZADOR: GRAFANA
+
+  grafana:
+    image: grafana:latest
+    container_name: grafana
+    networks:
+      - todo
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+    environment:
+      - GF_INSTALL_PLUGINS=hadesarchitect-cassandra-datasource
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/dashboard.json
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f localhost:3000/api/health && echo 'ready'"]
+      interval: 10s
+      retries: 30
+
+## PROCESADO: SPARK-CLUSTER
+
+  master:
+    image: hadoop-spark-master
+    hostname: master
+    container_name: master
+    environment:
+      SPARK_MASTER_HOST: master
+      SPARK_LOCAL_HOSTNAME: master
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+      - "4040:4040"
+      - "9870:9870"
+    volumes:
+      - namenode:/opt/hadoop/dfs/name
+    restart: always
+    networks:
+      - todo
+
+  worker1:
+    image: hadoop-spark-worker
+    hostname: worker1
+    container_name: worker1
+    depends_on:
+      - master
+    environment:
+      SPARK_MASTER_HOST: master
+      SPARK_LOCAL_HOSTNAME: worker1
+    ports:
+      - "8081:8081"
+    volumes:
+      - datanode1:/opt/hadoop/dfs/data
+    restart: always
+    networks:
+      - todo
+
+  worker2:
+    image: hadoop-spark-worker
+    hostname: worker2
+    container_name: worker2
+    depends_on:
+      - master
+    environment:
+      SPARK_MASTER_HOST: master
+      SPARK_LOCAL_HOSTNAME: worker2
+    ports:
+      - "8082:8081"
+    volumes:
+      - datanode2:/opt/hadoop/dfs/data
+    restart: always
+    networks:
+      - todo
+
+  history:
+    image: hadoop-spark-history
+    hostname: history
+    container_name: history
+    depends_on:
+      - master
+      - worker1
+      - worker2
+    environment:
+      SPARK_MASTER_HOST: master
+      SPARK_LOCAL_HOSTNAME: history
+    ports:
+      - "18080:18080"
+      - "19888:19888"
+    restart: always
+    networks:
+      - todo
+
+## JUPYTER en puerto 443
+
+  jupyter:
+    image: hadoop-spark-jupyter:latest
+    hostname: jupyter
+    container_name: jupyter
+    depends_on:
+      - master
+      - worker1
+      - worker2
+      - history
+    ports:
+        - "443:8888"
+    volumes:
+        - ./jupyter/notebook:/home/jupyter
+    networks:
+      - todo
+
+networks:
+  todo:
+    name: todo
+    driver: bridge
+
+volumes:
+  cassandra-db-volume:
+  grafana-data:
+  namenode:
+  datanode1:
+  datanode2:
+
+
