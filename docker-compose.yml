@@ -153,7 +153,7 @@ services:
 ## VISUALIZADOR: GRAFANA
 
   grafana:
-    image: grafana:latest
+    image: hpcjmart/grafana:latest
     container_name: grafana
     networks:
       - todo
@@ -172,7 +172,7 @@ services:
 ## PROCESADO: SPARK-CLUSTER
 
   master:
-    image: hadoop-spark-master
+    image: hpcjmart/spark-master
     hostname: master
     container_name: master
     environment:
@@ -183,14 +183,12 @@ services:
       - "8080:8080"
       - "4040:4040"
       - "9870:9870"
-    volumes:
-      - namenode:/opt/hadoop/dfs/name
     restart: always
     networks:
       - todo
 
   worker1:
-    image: hadoop-spark-worker
+    image: hpcjmart/spark-worker
     hostname: worker1
     container_name: worker1
     depends_on:
@@ -200,14 +198,12 @@ services:
       SPARK_LOCAL_HOSTNAME: worker1
     ports:
       - "8081:8081"
-    volumes:
-      - datanode1:/opt/hadoop/dfs/data
     restart: always
     networks:
       - todo
 
   worker2:
-    image: hadoop-spark-worker
+    image: hpcjmart/spark-worker
     hostname: worker2
     container_name: worker2
     depends_on:
@@ -217,14 +213,12 @@ services:
       SPARK_LOCAL_HOSTNAME: worker2
     ports:
       - "8082:8081"
-    volumes:
-      - datanode2:/opt/hadoop/dfs/data
     restart: always
     networks:
       - todo
 
   history:
-    image: hadoop-spark-history
+    image: hpcjmart/spark-history
     hostname: history
     container_name: history
     depends_on:
@@ -244,7 +238,7 @@ services:
 ## JUPYTER en puerto 443
 
   jupyter:
-    image: hadoop-spark-jupyter:latest
+    image: hpcjmart/spark-jupyter:latest
     hostname: jupyter
     container_name: jupyter
     depends_on:
@@ -267,8 +261,5 @@ networks:
 volumes:
   cassandra-db-volume:
   grafana-data:
-  namenode:
-  datanode1:
-  datanode2:
 
 

@@ -1,0 +1,5 @@
+{
+    "KAFKA_SERVER":"192.168.65.1",
+    "KAFKA_PORT":"29092",
+    "KAFKA_TOPIC_NAME":"market"
+}

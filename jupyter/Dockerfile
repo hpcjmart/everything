@@ -1,4 +1,4 @@
-FROM hadoop-spark-base AS base
+FROM hpcjmart/spark-base AS base
 FROM tensorflow/tensorflow:latest-gpu-jupyter
 
 RUN sed -i -e "s|http://archive.ubuntu.com|http://jp.archive.ubuntu.com|g" /etc/apt/sources.list \
@@ -13,8 +13,8 @@ RUN sed -i -e "s|http://archive.ubuntu.com|http://jp.archive.ubuntu.com|g" /etc/
 
 ARG USERNAME=jupyter
 ARG GROUPNAME=jupyter
-ARG UID=1000
-ARG GID=1000
+ARG UID=1001
+ARG GID=1003
 
 RUN echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
  && chmod 0440 /etc/sudoers.d/$USERNAME \
@@ -24,13 +24,6 @@ RUN echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
 USER $USERNAME
 
 ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/
-
-# Hadoop
-COPY --from=base --chown=$USERNAME:$GROUPNAME /opt/hadoop /opt/hadoop
-ENV HADOOP_HOME=/opt/hadoop
-ENV HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
-ENV PATH=$HADOOP_HOME/sbin:$HADOOP_HOME/bin:$PATH
-ENV LD_LIBRARY_PATH=$HADOOP_HOME/lib/native:$LD_LIBRARY_PATH
 
 # Spark
 COPY --from=base --chown=$USERNAME:$GROUPNAME /opt/spark /opt/spark

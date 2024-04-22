@@ -1,8 +1,4 @@
-FROM hadoop-spark-base
-
-ENV NAMEDIR=/opt/hadoop/dfs/name
-RUN mkdir -p /opt/hadoop/dfs/name
-VOLUME /opt/hadoop/dfs/name
+FROM hpcjmart/spark-base
 
 ENV SPARK_PUBLIC_DNS=localhost
 ENV SPARK_LOGS_HDFS_PATH=/var/log/spark
